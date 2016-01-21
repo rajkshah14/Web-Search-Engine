@@ -2,9 +2,6 @@ package project08.misc.log;
 
 import java.text.DecimalFormat;
 
-/**
- * Created by nicos on 24.November.15.
- */
 public class Log {
 
     /*

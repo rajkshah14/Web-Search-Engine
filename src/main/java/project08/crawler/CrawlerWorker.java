@@ -1,10 +1,6 @@
 package project08.crawler;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -20,6 +16,7 @@ import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
 
+import org.postgresql.util.Base64;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -31,7 +28,6 @@ import project08.misc.db.DML;
 import project08.misc.log.Log;
 
 /**
- * Created by Nico on 02.November.15.
  * The Heart of the crawler
  */
 public class CrawlerWorker extends Thread {
@@ -60,7 +56,7 @@ public class CrawlerWorker extends Thread {
 			currSite = new Website();
 			boolean gotSite = false;
 			try {//Get a new Site from the queue
-			    gotSite =  currSite.loadFromDB(con);
+			    gotSite =  currSite.getFromQueue(con);
 			} catch (SQLException e) { //If there is a problem, rollback
 			    rollback(e,true);
 			    continue;
@@ -87,7 +83,9 @@ public class CrawlerWorker extends Thread {
                 continue;
             } catch (IOException e) {
                 continue;
-            }catch(IllegalArgumentException e){continue;}
+            }catch(IllegalArgumentException e){
+                continue;
+            }
 
             Log.logInfo("Crawling site " + currSite.getNum() + "("+docCount+ ") "+ currUrl.toString());
 
@@ -110,28 +108,7 @@ public class CrawlerWorker extends Thread {
 					continue;
 			}
 
-            //Insert document into documents table
-            try {
-                inputStream.reset();
 
-                PreparedStatement stmt = con.prepareStatement("INSERT INTO "
-    					+ DML.Table_Documents + "(" + DML.Col_docId + ","
-    					+ DML.Col_url + ") VALUES (?,?) ON CONFLICT(" + DML.Col_docId + ") DO "
-                        + "UPDATE SET " + DML.Col_url + " = EXCLUDED." + DML.Col_url + " ,"
-                        + DML.Col_crawl_on_timestamp + " = EXCLUDED." + DML.Col_crawl_on_timestamp+" ");
-
-                stmt.setInt(1,currSite.getId());
-                stmt.setString(2,currSite.getUrlString());
-                stmt.execute();
-                con.commit();
-
-                Indexer indexer = new Indexer(inputStream, currSite.getId());
-
-               Log.logInfo("Indexer successful ? : " + indexer.processStream() + " url " + currUrl.toString());
-            } catch (SQLException e) {
-                rollback(e, true);
-                continue;
-            }
 
             Tidy tidy = getTidy();
 
@@ -149,50 +126,33 @@ public class CrawlerWorker extends Thread {
             if(xhtmlDoc == null){continue;}
             //Get all outgoing links with XPath
             XPath xpath = XPathFactory.newInstance().newXPath();
-            String expression = "//a[@href]";
+            if (!extractImages(currSite, currUrl, xhtmlDoc, xpath)) continue;
 
+            //Insert document into documents table
             try {
-                NodeList nodes = (NodeList) xpath.evaluate(expression, xhtmlDoc, XPathConstants.NODESET);
-                for(int i = 0; i<nodes.getLength();i++)
-                {
-                    //For every link on the webpage
-                    Node n = nodes.item(i);
-                    String link = n.getAttributes().getNamedItem("href").getNodeValue(); //Get the URL
-                    URL url = null;
-                    try {//And create a cleaned URL for it
-                        url = cleanURL(currUrl,link);
+                inputStream.reset();
 
-                    if(filterURL(url)) { //Check if the URL should be ignored
-                        //Create a new Website object with one more depth than the current site
-                        Website childSite = new Website(url, currSite.getDepth() + 1);
-                        if(childSite.getDepth() < maxDepth) { //Check if max depth is already reached
-                            if(leaveDomain || childSite.sameDomain(currSite)) { //Check Domain
-                                childSite.saveToDB(con); //Save website to queue
-                                try {//insert link
-                                	PreparedStatement stmt = con.prepareStatement("INSERT INTO "
-                                    		+ DML.Table_Links +"(" + DML.Col_from_doc_id +"," + DML.Col_to_doc_id + ") "
-                            				+ "VALUES (?,?) ON CONFLICT DO NOTHING ");
-                                    stmt.setInt(1,currSite.getId());
-                                    stmt.setInt(2, childSite.getId());
-                                    stmt.execute();
-                                    con.commit();
+                PreparedStatement stmt = con.prepareStatement("INSERT INTO "
+                        + DML.Table_Documents + "(" + DML.Col_docId + ","
+                        + DML.Col_url + ") VALUES (?,?) ON CONFLICT(" + DML.Col_docId + ") DO "
+                        + "UPDATE SET " + DML.Col_url + " = EXCLUDED." + DML.Col_url + " ,"
+                        + DML.Col_crawl_on_timestamp + " = EXCLUDED." + DML.Col_crawl_on_timestamp+" ");
 
-                                } catch (SQLException e) {
-                                    rollback(e);
-                                }
-                            }
-                        }
-                    }
-                    } catch (MalformedURLException e) {//Ignore wrong URLS
-                    }
+                stmt.setInt(1,currSite.getId());
+                stmt.setString(2,currSite.getUrlString());
+                stmt.execute();
+                con.commit();
 
-                }
-            } catch (XPathExpressionException e) {
-                Log.logException(e);
+                Indexer indexer = new Indexer(inputStream, currSite.getId());
+
+                Log.logInfo("Indexer successful ? : " + indexer.processStream() + " url " + currUrl.toString());
+            } catch (SQLException e) {
+                rollback(e, true);
                 continue;
-            }catch(ArrayIndexOutOfBoundsException e){continue; } //Happens rarely because of a Bug in XPath/Jtidy
-            catch(NullPointerException e){continue; } //Happens rarely because of a Bug in XPath/Jtidy
-            catch (Exception e){Log.logException(e); continue;}
+            }
+
+            if (!extractLinks(currSite, currUrl, xhtmlDoc, xpath)) continue;
+
             try {
                 sleep(200);
             } catch (InterruptedException e) {
@@ -209,6 +169,120 @@ public class CrawlerWorker extends Thread {
          }
 
         Log.logInfo("Worker finished");
+    }
+
+    private boolean extractImages(Website currSite,URL currUrl, Document xhtmlDoc, XPath xpath){
+        String expression = "//img";
+        try {
+            NodeList nodes = (NodeList) xpath.evaluate(expression, xhtmlDoc, XPathConstants.NODESET);
+            for (int i = 0; i < nodes.getLength(); i++) {
+                try {
+                    Node n = nodes.item(i);
+                    String src = n.getAttributes().getNamedItem("src").getNodeValue();
+                    String alt = "";
+                    if (n.getAttributes().getNamedItem("alt") != null) {
+                        alt = n.getAttributes().getNamedItem("alt").getNodeValue();
+                    }
+
+                    URL imgUrl = new URL(currUrl, src);
+                    URLConnection urlConnection = imgUrl.openConnection();
+
+
+                   PreparedStatement stmt =  con.prepareStatement("INSERT INTO " + DML.Table_Images + " VALUES(?,?,?,?,?,?,?)");
+                    stmt.setInt(1,currSite.getId()); //DocID
+                    stmt.setInt(2,i); //Index of Image on Page
+                    stmt.setInt(3,-1); //Placeholder position in text
+                    stmt.setString(4,imgUrl.toString()); //URL
+                    stmt.setString(5,alt); //AltText
+                    InputStream is = urlConnection.getInputStream();
+
+                    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                    int nRead;
+                    byte[] data = new byte[16384];
+
+                    while ((nRead = is.read(data, 0, data.length)) != -1) {
+                        buffer.write(data, 0, nRead);
+                    }
+                    buffer.flush();
+                    byte[] bytes = buffer.toByteArray();
+                    String imageType = URLConnection.guessContentTypeFromStream(new ByteArrayInputStream(bytes));
+                    if(imageType != null && imageType.equalsIgnoreCase("application/xml"))
+                        imageType = "image/svg+xml";
+                    stmt.setString(6,imageType);
+                    stmt.setString(7,Base64.encodeBytes(bytes));
+
+                    stmt.execute();
+                    con.commit();
+                } catch (MalformedURLException e) {
+                    continue;
+                } catch (IOException e) {
+                    continue;
+                } catch (SQLException e) {
+                    rollback(e);
+                    continue;
+                }catch (NullPointerException e){
+                    continue;
+                }
+            }
+        } catch (XPathExpressionException e) {
+            return false;
+        }
+        return true;
+    }
+
+    private boolean extractLinks(Website currSite, URL currUrl, Document xhtmlDoc, XPath xpath) {
+
+        String expression = "//a[@href]";
+
+        try {
+            NodeList nodes = (NodeList) xpath.evaluate(expression, xhtmlDoc, XPathConstants.NODESET);
+            for(int i = 0; i<nodes.getLength();i++)
+            {
+                //For every link on the webpage
+                Node n = nodes.item(i);
+                String link = n.getAttributes().getNamedItem("href").getNodeValue(); //Get the URL
+                URL url = null;
+                try {//And create a cleaned URL for it
+                    url = cleanURL(currUrl,link);
+
+                if(filterURL(url)) { //Check if the URL should be ignored
+                    //Create a new Website object with one more depth than the current site
+                    Website childSite = new Website(url, currSite.getDepth() + 1);
+                    if(childSite.getDepth() < maxDepth) { //Check if max depth is already reached
+                        if(leaveDomain || childSite.sameDomain(currSite)) { //Check Domain
+                            childSite.savetoQueue(con); //Save website to queue
+                            try {//insert link
+                                PreparedStatement stmt = con.prepareStatement("INSERT INTO "
+                                        + DML.Table_Links +"(" + DML.Col_from_doc_id +"," + DML.Col_to_doc_id + ") "
+                                        + "VALUES (?,?) ON CONFLICT DO NOTHING ");
+                                stmt.setInt(1,currSite.getId());
+                                stmt.setInt(2, childSite.getId());
+                                stmt.execute();
+                                con.commit();
+
+                            } catch (SQLException e) {
+                                rollback(e);
+                            }
+                        }
+                    }
+                }
+                } catch (MalformedURLException e) {//Ignore wrong URLS
+                }
+
+            }
+        } catch (XPathExpressionException e) {
+            Log.logException(e);
+            return false;
+        }catch(ArrayIndexOutOfBoundsException e){
+            return false;
+        } //Happens rarely because of a Bug in XPath/Jtidy
+        catch(NullPointerException e){
+            return false;
+        } //Happens rarely because of a Bug in XPath/Jtidy
+        catch (Exception e){Log.logException(e);
+            return false;
+        }
+        return true;
     }
 
     private Tidy getTidy() {
@@ -303,12 +377,20 @@ public class CrawlerWorker extends Thread {
         try{
             con.rollback();
             if(reset) {
-                String sql = "ALTER SEQUENCE crawlerNumDocuments INCREMENT BY -1";
-                con.createStatement().execute(sql);
-                con.commit();
+                resetSequence();
             }
         } catch (SQLException e1) {
             Log.logException(e);
+        }
+    }
+
+    private void resetSequence(){
+        try{
+			String sql = "ALTER SEQUENCE crawlerNumDocuments INCREMENT BY -1";
+			con.createStatement().execute(sql);
+			con.commit();
+        } catch (SQLException e1) {
+            Log.logException(e1);
         }
     }
 }

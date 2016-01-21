@@ -16,8 +16,12 @@ public class DML {
 	public static final String Table_Crawler_queue = "crawler_queue";
 	public static final String Table_Crawl_Request = "crawl_request";
 	public static final String Table_Doc_Count = "doc_count";
+	public static final String Table_Images = "images";
+	public static final String Table_shingles = "shingles";
+	public static final String Table_Jaccard = "jaccard";
 
 	//Views
+	public static final String View_DocPairs = "docPairs";
 	public static final String View_Features_tfidf = "features_tfidf";
 	public static final String View_Features_bm25 = "features_bm25";
 	public static final String View_Features_bm25_pagerank = "features_bm25_pagerank";
@@ -32,6 +36,8 @@ public class DML {
 	public static final String Function_Pagerank_Weight = "pagerank_weight";
 	public static final String Function_bm25_Weight = "bm25_weight";
 	public static final String Function_calculate_bm25_pagerank = "calculate_bm25_pagerank";
+	public static final String Function_calculate_jaccard = "calculate_jaccard";
+	public static final String Function_similarDocuments = "similarDocuments";
 
 	//Indexes
 	public static final String Index_queue_docId = "queue_docID";
@@ -42,6 +48,7 @@ public class DML {
 	public static final String Index_documents_URL = "documents_URL";
 	public static final String Index_features_docID = "features_docID";
 	public static final String Index_features_wordID = "features_wordID";
+	public static final String Index_features_term = "features_term";
 	public static final String Index_features_language = "features_language";
 	
 	//Table Documents
@@ -69,6 +76,7 @@ public class DML {
 	public static final String Col_bm25_pagerank = "bm25_pagerank";
 	public static final String Col_score = "score";
 	public static final String Col_language = "language";
+	public static final String Col_position = "position";
 	public static final int maxTermLength = 255;
 	//Table Links
 	public static final String Col_from_doc_id = "from_docid";
@@ -84,6 +92,22 @@ public class DML {
 	public static final String Col_max_doc = "max_doc";
 	//Table Doc_Count
 	public static final String Col_count = "count";
+
+	//Table Images
+	public static final String Col_image = "image";
+	public static final String Col_pageindex = "pageindex";
+	public static final String Col_altText = "alt";
+	public static final String Col_src = "src";
+	public static final String Col_type = "type";
+
+	//Table Shingle
+	public static final String Col_shingle = "shingle";
+	public static final String Col_hash = "hash";
+
+	//Table Jaccard
+	public static final String Col_doc1 = "doc1";
+	public static final String Col_doc2 = "doc2";
+	public static final String Col_jaccard = "jaccard";
 
 	// Query Terms
 	public static final String Features_doc_id = Table_Features + "." + Col_docId;
@@ -112,7 +136,10 @@ public class DML {
 			System.out.println("Links : " + createTableLinks(false));
 			System.out.println("Queue : " + createTableQueue(false));
 			System.out.println("Crawl Request : " + createTableCrawlRequest(false));
-			System.out.println("DocCount : " + createTableDocCount(true));
+			System.out.println("DocCount : " + createTableDocCount(false));
+			System.out.println("Images : " + createTableImages(false));
+			System.out.println("Shingles : " + createTableShingle(false));
+			System.out.println("Jaccard : " + createTableJaccard(true));
 		} else {
 			createTableDocuments(false);
 			createTableFeatures(false);
@@ -121,7 +148,10 @@ public class DML {
 			createTableLinks(false);
 			createTableQueue(false);
 			createTableCrawlRequest(false);
-			createTableDocCount(true);
+			createTableDocCount(false);
+			createTableImages(false);
+			createTableShingle(false);
+			createTableJaccard(true);
 		}
 	}
 
@@ -129,11 +159,11 @@ public class DML {
 		if (isLogger) {
 			System.out.println("Features_TFIDF : "+ createViewFeaturesTFIDF(false));
 			System.out.println("Features_BM25 : "+ createViewFeaturesBm25(false));
-			System.out.println("Features_BM25_Pagerank : "+ createViewFeaturesBm25Pagerank(false));
+			System.out.println("Features_BM25_Pagerank : "+ createViewFeaturesBm25Pagerank(true));
 		} else {
 			createViewFeaturesTFIDF(false);
 			createViewFeaturesBm25(false);
-			createViewFeaturesBm25Pagerank(false);
+			createViewFeaturesBm25Pagerank(true);
 		}
 	}
 
@@ -146,14 +176,18 @@ public class DML {
 			System.out.println("Index " + Index_documents_URL+": " + createDocumentsURLIndex(false));
 			System.out.println("Index " + Index_features_docID+": " + createFeaturesDocIdIndex(false));
 			System.out.println("Index " + Index_features_wordID+": " + createFeaturesWordIdIndex(false));
+			System.out.println("Index " + Index_features_term+": " + createFeaturesTermIndex(false));
 			System.out.println("Index " + Index_features_language + ":" + createFeaturesLanguageIndex(true));
 		} else {
 			createQueueDocIDIndex(false);
 			createQueueURLIndex(false);
 			createQueueDepthIndex(false);
 			createDocumentsDocIdIndex(false);
+			createDocumentsURLIndex(false);
 			createFeaturesDocIdIndex(false);
 			createFeaturesWordIdIndex(true);
+			createFeaturesTermIndex(false);
+			createFeaturesLanguageIndex(true);
 		}
 	}
 
@@ -166,17 +200,23 @@ public class DML {
 			System.out.println("AvgDocLength Function : " + getAvgDocLength(false));
 			System.out.println("Pagerank Weight Function : " + getPagerankWeight(false));
 			System.out.println("BM25 Weight Function : " + getBM25Weight(false));
-			System.out.println("Score Function : " + calculateScores(true));
+			System.out.println("Score Function : " + calculateScores(false));
+			System.out.println("DocPairs : "+ createViewDocPairs(false));
+			System.out.println("Jaccard Function : " + calculateJaccard(false));
+			System.out.println("SimilarDocuments Function : " + similarDocuments(false));
 			System.out.println("Calculate BM25 Pagerank Score Function : " + calculatebm25pagerank(true));
 		} else {
 			calculateDocCountFunction(false);
 			calculateDocTermCountFunction(false);
 			calculateIDFFunction(false);
-			getBM25Weight(false);
-			getPagerankWeight(false);
 			getDocLength(false);
 			getAvgDocLength(false);
-			calculateScores(true);
+			getPagerankWeight(false);
+			getBM25Weight(false);
+			calculateScores(false);
+			createViewDocPairs(false);
+			calculateJaccard(false);
+			similarDocuments(false);
 			calculatebm25pagerank(true);
 		}
 	}
@@ -193,6 +233,14 @@ public class DML {
 				+ DML.Col_wordId + " int PRIMARY key, "
 				+ Col_count+ " int);",closeDb);
 	}
+	private static boolean createTableJaccard(boolean closeDb){
+		return createTable("CREATE TABLE IF NOT EXISTS " +
+				Table_Jaccard + "("
+				+ Col_doc1 + " int , "
+				+ Col_doc2+ " int,"
+				+ Col_jaccard + " double precision , "
+				+ "CONSTRAINT JaccardPK PRIMARY KEY("+Col_doc1+","+Col_doc2+"))",closeDb);
+	}
 
 	private static boolean createTableFeatures(boolean closeDb) {
 		return createTable("CREATE TABLE IF NOT EXISTS "+Table_Features+" ("
@@ -208,6 +256,18 @@ public class DML {
 				+ Col_bm25_pagerank + " double precision DEFAULT 0.0, "
 				+ Col_language + " varchar(2) check ( " + Col_language + " IN ('en','de','ot')), "
 				+ "CONSTRAINT featuresPK PRIMARY KEY("+Col_docId+","+Col_wordId+"))",closeDb);
+	}
+
+	private static boolean createTableImages(boolean closeDb) {
+		return createTable("CREATE TABLE IF NOT EXISTS "+Table_Images+" ("
+				+ Col_docId +" integer, "
+				+ Col_pageindex +" integer, "
+				+ Col_position + " integer, "
+				+ Col_src + " text, "
+				+ Col_altText + " text, "
+				+ Col_type + " varchar, "
+				+ Col_image + " text NOT NULL, "
+				+ "CONSTRAINT imagePK PRIMARY KEY("+Col_docId+","+Col_pageindex+"))",closeDb);
 	}
 
 	private static boolean createViewFeaturesTFIDF(boolean closeDb) {
@@ -230,6 +290,12 @@ public class DML {
 				+ Col_term_frequency + ", "
 				+ Col_bm25 + " AS " + Col_score
 				+ " FROM " + Table_Features, closeDb);
+	}
+
+	private static boolean createViewDocPairs(boolean closeDb) {
+		return createTable("CREATE OR REPLACE VIEW "+View_DocPairs
+				+" AS SELECT d1."+Col_docId+" AS doc1, d2."+Col_docId+" AS doc2 FROM "+Table_Documents
+				+" d1 CROSS JOIN "+Table_Documents+" d2 WHERE d1."+Col_docId+" <> d2."+Col_docId, closeDb);
 	}
 
 	private static boolean createViewFeaturesBm25Pagerank(boolean closeDb) {
@@ -283,6 +349,15 @@ public class DML {
 				+ Col_leave_domain + " BOOLEAN, "
 				+ Col_crawl_on_timestamp + " timestamp DEFAULT ('now'::text)::timestamp, "
 				+ Col_visited +" BOOLEAN DEFAULT FALSE)",closeDb);
+	}
+
+	//
+	private static boolean createTableShingle(boolean closeDb) {
+		return createTable("CREATE TABLE IF NOT EXISTS " + Table_shingles + " ( "
+				+ Col_docId + " INTEGER, "
+				+ Col_shingle + " varchar, "
+				+ Col_hash +" INTEGER, "
+				+"CONSTRAINT shinglePK PRIMARY KEY("+Col_docId+","+Col_hash+"))",closeDb);
 	}
 
 	private static boolean calculateDocCountFunction(boolean closeDb){
@@ -346,6 +421,26 @@ public class DML {
 				"RETURNING TRUE; $$",closeDb);
 	}
 
+	private static boolean calculateJaccard(boolean closeDb){
+		return createTable("CREATE OR REPLACE FUNCTION "+Function_calculate_jaccard+"() RETURNS BOOLEAN LANGUAGE SQL " +
+				"AS $$  INSERT INTO "+Table_Jaccard+" "
+				+ "SELECT "+Col_doc1+", "+Col_doc2+", (CAST(intersection AS double precision)/ unio) AS jaccard "
+				+ "FROM (SELECT "+Col_doc1+", "+Col_doc2+", "
+				+ "(SELECT COUNT("+Col_hash+") FROM "+Table_shingles+" WHERE "+Table_shingles+"."+Col_docId+" = doc1 "
+				+ "OR "+Table_shingles+"."+Col_docId+" = doc2) AS unio, "
+				+ " (SELECT COUNT(s1."+Col_hash+") FROM "+Table_shingles+" s1, "+Table_shingles+" s2 "
+				+ " WHERE s1."+Col_docId+" = doc1 AND s2."+Col_docId+" = doc2 AND s1."+Col_hash+" = s2."+Col_hash+") AS intersection "
+				+ "FROM docPairs GROUP BY "+Col_doc1+","+Col_doc2+") AS pairs "
+				+ " RETURNING TRUE $$", closeDb);
+	}
+
+	private static boolean similarDocuments(boolean closeDb){
+		return createTable("CREATE OR REPLACE FUNCTION "+Function_similarDocuments+"(integer, double precision) RETURNS " +
+				"TABLE("+Col_docId+" int, "+Col_jaccard+" double precision) LANGUAGE SQL " +
+				"AS $$  SELECT "+Col_doc2+" AS "+Col_docId+", "+Col_jaccard+" FROM "+Table_Jaccard+" " +
+				"WHERE "+Col_doc1+" = $1 AND "+Col_jaccard+" >= $2 $$", closeDb);
+	}
+
 	private static boolean calculateScores(boolean closeDb){
 		return createTable("CREATE OR REPLACE FUNCTION "+Function_Calc_TFIDF+"() RETURNS BOOLEAN LANGUAGE SQL " +
 				"AS $$  UPDATE " + Table_Features +" SET " + Col_tf_idf +" = " +
@@ -393,6 +488,10 @@ public class DML {
 		return executeSQL("CREATE INDEX "+ Index_features_language + " ON " + Table_Features + " " +
 				"USING hash ( " + Col_language +") ",false, closeDb);
 	}
+	private static boolean createFeaturesTermIndex(boolean closeDb){
+		return executeSQL("CREATE INDEX "+ Index_features_term + " ON " + Table_Features + " " +
+				"USING hash ( " + Col_term +") ",false, closeDb);
+	}
 
 	private static boolean executeSQL(String sql, boolean printException, boolean closeDb) {
 		
@@ -431,6 +530,9 @@ public class DML {
 				+ ", " + Table_Doc_Count
 				+ ", " + Table_Documents
 				+ ", " + Table_Features
+				+ ", " + Table_Images
+				+ ", " + Table_shingles
+				+ ", " + Table_Jaccard
 				+ ", " + Table_Links + " CASCADE";
 		System.out.println(query);
 		executeSQL(query, true, true);
@@ -445,15 +547,17 @@ public class DML {
 				+ "; DROP FUNCTION  IF EXISTS " + Function_Pagerank_Weight + "()"
 				+ "; DROP FUNCTION  IF EXISTS " + Function_bm25_Weight + "()"
 				+ "; DROP FUNCTION  IF EXISTS " + Function_calculate_bm25_pagerank + "()"
-				+ "; DROP FUNCTION  IF EXISTS " + Function_Doc_Length + "()";
+				+ "; DROP FUNCTION  IF EXISTS " + Function_Doc_Length + "()"
+				+ "; DROP FUNCTION  IF EXISTS " + Function_similarDocuments + "(integer, double precision)"
+				+ "; DROP FUNCTION  IF EXISTS " + Function_calculate_jaccard + "()";
 		System.out.println(query);
 		executeSQL(query, true, true);
 	}
 
 	public static void main (String[] args) throws SQLException {
-		//dropAllTable();
-		//dropAllFunction();
-		//createTables();
+		dropAllTable();
+		dropAllFunction();
+		createTables();
 		createFunctions();
 		createViews();
 	}

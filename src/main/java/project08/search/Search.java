@@ -11,10 +11,8 @@ import project08.misc.db.DBConfig;
 import project08.misc.db.DML;
 import project08.model.SearchResultItem;
 import project08.query.QueryParser;
+import project08.query.ResultSnippet;
 
-/**
- * Created by Nico on 17.November.15.
- */
 public class Search {
     public enum ScoringModel {
         TF_IDF(DML.View_Features_tfidf),
@@ -29,7 +27,7 @@ public class Search {
 
     }
 
-    private ScoringModel sm;
+    protected ScoringModel sm;
 
     public Search()
     {
@@ -44,22 +42,40 @@ public class Search {
     public List<SearchResultItem> search(String query, int resultSize, boolean disjunctive) {
         return search(query,resultSize,disjunctive, "");
     }
+    
+    protected List<SearchResultItem> search(String query, int resultSize, boolean disjunctive, boolean isImage) {
+        return search(query,resultSize,disjunctive, "", isImage);
+    }
+    
+    public List<SearchResultItem> search (String db, String query, int resultSize, boolean disjunctive ) {
+        return search(db,query,resultSize,disjunctive, "");
+    }
+    
+    protected List<SearchResultItem> search (String db, String query, int resultSize, boolean disjunctive , boolean isImage) {
+        return search(db,query,resultSize,disjunctive, "", isImage);
+    }
 	
 	public List<SearchResultItem> search(String query, int resultSize, boolean disjunctive, String language) {
     	Connection con = DBConfig.getConnection();
-    	return search(con,query,resultSize,disjunctive, language);
+    	return search(con,query,resultSize,disjunctive, language, false);
+    }
+	
+	protected List<SearchResultItem> search(String query, int resultSize, boolean disjunctive, String language, boolean isImage) {
+    	Connection con = DBConfig.getConnection();
+    	return search(con,query,resultSize,disjunctive, language, isImage);
     }
 	
 	public List<SearchResultItem> search (String db, String query, int resultSize, boolean disjunctive, String language ) {
 		Connection con = DBConfig.getConnection(db);
-    	return search(con,query,resultSize,disjunctive, language);
+    	return search(con,query,resultSize,disjunctive, language, false);
+	}
+	
+	public List<SearchResultItem> search (String db, String query, int resultSize, boolean disjunctive, String language , boolean isImage) {
+		Connection con = DBConfig.getConnection(db);
+    	return search(con,query,resultSize,disjunctive, language, isImage);
 	}
 
-    public List<SearchResultItem> search (String db, String query, int resultSize, boolean disjunctive ) {
-        return search(db,query,resultSize,disjunctive, "");
-    }
-
-    private List<SearchResultItem> search(Connection con, String query, int resultSize, boolean disjunctive, String language ) {
+    protected List<SearchResultItem> search(Connection con, String query, int resultSize, boolean disjunctive, String language, boolean isImage) {
         QueryParser qp = new QueryParser(query);
         List<String> queryTerms = qp.getTerms();
         String where = qp.getWherePedicate();
@@ -67,15 +83,15 @@ public class Search {
         if(language != null && language.length()>0 && !language.equals("ot"))
             where += " AND documents.language = '"+language+"'";
 
-        int termCount = queryTerms.size();
+        int termCount = qp.getTermCount();
         List<SearchResultItem> resultList = new ArrayList<SearchResultItem>();
         if(termCount>0) {
             try {
                 ResultSet rs;
                 if(disjunctive)
-                    rs = searchDisjuntive(queryTerms,resultSize, con, where);
+                    rs = searchDisjuntive(queryTerms,resultSize, con, where, isImage);
                 else
-                    rs = searchConjunctive(queryTerms, resultSize, con, where);
+                    rs = searchConjunctive(queryTerms, resultSize, con, where, isImage);
 
                 if(rs != null) {
                     int i = 0;
@@ -85,7 +101,8 @@ public class Search {
                         item.setTf_idf(rs.getDouble("score"));
                         item.setRank(++i);
                         item.setTitle(rs.getString("title")); //todo if title is null then Extract domain name & set it as title, This can be done while adding title in db
-                        item.setContent_snap(rs.getString("content_snap"));
+                        String summary = ResultSnippet.createSnippetText(rs.getString("content_snap"),qp.getAllTerms());
+                        item.setContent_snap(summary);
                         resultList.add(item);
                     }
                 }
@@ -99,46 +116,72 @@ public class Search {
         return resultList;
     }
 
-    private ResultSet searchDisjuntive(List<String> terms, int resultSize, Connection con, String where){
-        int termCount = terms.size();
-        String termList = "?";
-        for (int i = 1; i < termCount; i++) {
-            termList += ",?";
-        }
-            try {
-                PreparedStatement ps = con.prepareStatement(
-                    "select documents.doc_id, sum(score) as score, MIN(url) as url, documents.title as title, documents.content_snap as content_snap " +
-                        "from "+sm.table+" AS features, documents " +
-                        "where features.doc_id = documents.doc_id AND word_id in ("+termList+") " + where +
-                        "group by documents.doc_id " +
-                        "having count(word_id) = ?" +
-                        "order by score desc " +
-                        "LIMIT ?");
-
-                for (int i = 0; i < termCount; i++) {
-                    ps.setInt(i + 1, terms.get(i).hashCode());
-                }
-                ps.setInt(termCount+1,termCount);
-                ps.setInt(termCount+2,resultSize);
-                ResultSet rs = ps.executeQuery();
-                return rs;
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        return null;
-    }
-
-    private ResultSet searchConjunctive(List<String> terms, int resultSize, Connection con, String where){
+    private ResultSet searchDisjuntive(List<String> terms, int resultSize, Connection con, String where, boolean isImage){
         int termCount = terms.size();
         String termList = "?";
         for (int i = 1; i < termCount; i++) {
             termList += ",?";
         }
         try {
-            PreparedStatement ps = con.prepareStatement(
+            PreparedStatement ps; 
+            if (isImage)
+            	ps = con.prepareStatement( "select documents.doc_id, sum(score) as score, MIN(url) as url, documents.title as title, documents.content_snap as content_snap " +
+                        //from (select * from features_bm25_pagerank f inner join (select distinct doc_id as temp_doc_id from images) i on ( f.doc_id = i.temp_doc_id )) AS features, documents 
+            			"from (select * from " + sm.table + " f inner join (select distinct doc_id as temp_doc_id from images) i on ( f.doc_id = i.temp_doc_id )) AS features, documents " +
+                        "where features.doc_id = documents.doc_id AND word_id in ("+termList+") " + where +
+                        "group by documents.doc_id " +
+                        "having count(word_id) = ?" +
+                        "order by score desc " +
+                        "LIMIT ?");
+            
+            else
+            	ps = con.prepareStatement( "select documents.doc_id, sum(score) as score, MIN(url) as url, documents.title as title, documents.content_snap as content_snap " +
+                        "from "+sm.table+" AS features, documents " +
+                        "where features.doc_id = documents.doc_id AND word_id in ("+termList+") " + where +
+                        "group by documents.doc_id " +
+                        "having count(word_id) = ?" +
+                        "order by score desc " +
+                        "LIMIT ?");
+            	
+
+            for (int i = 0; i < termCount; i++) {
+                ps.setInt(i + 1, terms.get(i).hashCode());
+            }
+            ps.setInt(termCount+1,termCount);
+            ps.setInt(termCount+2,resultSize);
+            ResultSet rs = ps.executeQuery();
+            return rs;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    private ResultSet searchConjunctive(List<String> terms, int resultSize, Connection con, String where, boolean isImage ) {
+        int termCount = terms.size();
+        String termWhere = "";
+        if(termCount>0) {
+            String termList = "?";
+            for (int i = 1; i < termCount; i++) {
+                termList += ",?";
+            }
+            termWhere = " AND word_id in ("+termList+") ";
+        }
+        try {
+            PreparedStatement ps;
+            if (isImage)
+            	ps = con.prepareStatement(
+                "select documents.doc_id, sum(score) as score, MIN(url) as url, documents.title as title, documents.content_snap as content_snap  " +
+                    "from (select * from " + sm.table + " f inner join (select distinct doc_id as temp_doc_id from images) i on ( f.doc_id = i.temp_doc_id )) AS features, documents " +
+                    "where features.doc_id = documents.doc_id " + termWhere + where +
+                    "group by documents.doc_id " +
+                    "order by score desc " +
+                    "LIMIT ?");
+            else 
+            	ps = con.prepareStatement(
                 "select documents.doc_id, sum(score) as score, MIN(url) as url, documents.title as title, documents.content_snap as content_snap  " +
                     "from "+sm.table+" AS features, documents " +
-                    "where features.doc_id = documents.doc_id AND word_id in ("+termList+") " + where +
+                    "where features.doc_id = documents.doc_id " + termWhere + where +
                     "group by documents.doc_id " +
                     "order by score desc " +
                     "LIMIT ?");
@@ -161,7 +204,7 @@ public class Search {
         String query = "de tu startpag die";
         System.out.println("----------- Searching for \"" + query +"\"---------------------");
         System.out.println("---------Englisch----------------------");
-        for (SearchResultItem searchResultItem : search.search(query, 5, true, "en")) {
+        for (SearchResultItem searchResultItem : search.search(query, 5, false, "en",true)) {
             System.out.println(searchResultItem.toString());
         }
         System.out.println("---------German----------------------");

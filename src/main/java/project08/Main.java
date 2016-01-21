@@ -20,7 +20,7 @@ public class Main {
 		DML.dropAllFunction();
 		DML.dropAllTable();
 		DML.initializeDatabase();
-		Crawler.crawl(3,false,2500, urls);
+		Crawler.crawl(3,true,500, urls);
 		System.out.println("Creating indexes");
 		DML.createIndexes();
 	}

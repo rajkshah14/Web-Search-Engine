@@ -11,8 +11,6 @@ import java.sql.SQLException;
 /**
  * Helper class which represents a URL and further information needed for the crawler.
  * It implements the queue and enqueue functions
- *
- * Created by Nico on 03.November.15.
  */
 public class Website {
     private int id = 0;
@@ -49,28 +47,29 @@ public class Website {
      * @throws SQLException If there is a error with the connection
      * @throws MalformedURLException If the URL could not be created
      */
-    public boolean loadFromDB(Connection con) throws SQLException, MalformedURLException {
-        PreparedStatement stmt = con.prepareStatement(
-               // "SELECT id, url, depth, nextval('crawlerNumDocuments') as num " +
-                //"FROM public.crawler_queue;");
-                "UPDATE  public.crawler_queue SET visited = true WHERE doc_id = (SELECT min(q.doc_id) FROM crawler_queue q WHERE q.visited = FALSE " +
-                        "GROUP BY q.depth ORDER BY q.depth ASC LIMIT 1 ) " +
-                        " RETURNING doc_id, url, depth, nextval('crawlerNumDocuments') as num");
-        stmt.execute();
-        con.commit();
+    public boolean getFromQueue(Connection con) throws SQLException, MalformedURLException {
+        synchronized (Website.class){
+            PreparedStatement stmt = con.prepareStatement(
+                    // "SELECT id, url, depth, nextval('crawlerNumDocuments') as num " +
+                    //"FROM public.crawler_queue;");
+                    "UPDATE  public.crawler_queue SET visited = true WHERE doc_id = (SELECT min(q.doc_id) FROM crawler_queue q WHERE q.visited = FALSE " +
+                            "GROUP BY q.depth ORDER BY q.depth ASC LIMIT 1 ) " +
+                            " RETURNING doc_id, url, depth, nextval('crawlerNumDocuments') as num");
+            stmt.execute();
+            con.commit();
 
-        ResultSet rs = stmt.getResultSet();
+            ResultSet rs = stmt.getResultSet();
 
-        if(rs.next()) {
-            this.id = rs.getInt(1);
-            this.url = new URL(rs.getString(2));
-            this.depth = rs.getInt(3);
-            this.num = rs.getInt(4);
-            this.domain = this.url.getHost();
-            this.domain = domain.startsWith("www.") ? domain.substring(4) : domain;
-            return true;
-        }else return false;
-
+            if(rs.next()) {
+                this.id = rs.getInt(1);
+                this.url = new URL(rs.getString(2));
+                this.depth = rs.getInt(3);
+                this.num = rs.getInt(4);
+                this.domain = this.url.getHost();
+                this.domain = domain.startsWith("www.") ? domain.substring(4) : domain;
+                return true;
+            }else return false;
+        }
     }
 
     /**
@@ -78,7 +77,7 @@ public class Website {
      * @param con The connection used for writing
      * @throws SQLException Thrown if there was a problem with the connection or data (E.G.: duplicate entries)
      */
-    public void saveToDB(Connection con)  {
+    public void savetoQueue(Connection con)  {
 
         try {
             PreparedStatement stmt = con.prepareStatement("INSERT INTO public.crawler_queue(doc_id,url, depth) VALUES (?,?, ?) " +

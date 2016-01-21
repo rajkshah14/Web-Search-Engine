@@ -1,3 +1,4 @@
+<%@page import="project08.model.ImageSearchResultItem"%>
 <%@page import="project08.model.SearchResultItem"%>
 <%@ page import="java.util.*"%>
 <%@ page import="project08.search.*"%>
@@ -20,8 +21,8 @@
 	if (request.getParameter("query") != null) {
 		query = request.getParameter("query");
 	}
-	final String[] lang = {"English", "German", "All"};
-	String language = lang[0];
+	final String[] lang = {"English", "German", "All"}, search_types = {"Text","Image"};
+	String language = lang[0], search_type = search_types[0];
 	try {
 		Locale locale = request.getLocale();
 		
@@ -40,6 +41,10 @@
 			else 
 				language = lang[2];	
 		}
+		
+		if(request.getParameter("search_type").equals(search_types[1])) {
+			search_type = search_types[1];
+		}
 	} catch(Exception e) {}
 	%>
 	<nav class="navbar navbar-default">
@@ -57,6 +62,16 @@
 			<div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
 			<!-- typeahead tt-query -->
 				<form class="navbar-form navbar-right" role="search" method="get">
+					
+					<select name="search_type" id="search_type" class="form-control">
+						<% for (int count = 0; count < search_types.length; count++) { %>
+							<%if(search_type.equals(search_types[count])) { %>           
+	            				<option selected="selected" value="<%=search_types[count]%>"><%=search_types[count]%></option>  
+	        				<%} else { %> 
+        					<option value="<%=search_types[count]%>"><%=search_types[count]%></option>  
+						<% }} %>
+					</select>
+					
 					<select name="language" id="language" class="form-control">
 						<% for (int count = 0; count < lang.length; count++) { %>
 							<%if(language.equals(lang[count])) { %>           
@@ -76,45 +91,72 @@
 	</nav>
 
 	<%
-	Search search = new Search();
-	List<SearchResultItem> resultItems = null;
-	if (language!=null && language.length()>0) {
-		if (language.equalsIgnoreCase(lang[0]))
-			resultItems = search.search(query,20,false,"en");
-		else if (language.equalsIgnoreCase(lang[1]))
-			resultItems = search.search(query,20,false,"de");
-		else 
-			resultItems = search.search(query,20,false);
-	} else 
-	resultItems = search.search(query,20,true);
-	Snippet snippet = new Snippet();
-	for (int i = 0; i < resultItems.size(); i++) {
-		SearchResultItem item = resultItems.get(i);
-	%>
-	<div class="bs-callout bs-callout-info col-sm-12">
-		<a href="<%=item.getUrl()%>">
-		<div class="col-sm-1">
-			<h3>#<%=item.getRank()%></h3>
-		</div>
-		<div class="col-sm-11">
-			<h4><b><%=item.getTitle() %></b></h4>
-			<h5> <%=item.getUrl()%></h5>
-			<h5><%=item.getTf_idf()%></h5>
-			<h6><%=snippet.getSnippet(item.getContent_snap(), query)%></h6>
-		</div>
-		</a>
-	</div>
-	<%
+	
+	if (!search_type.equals(search_types[1])) {
+		Search search = new Search();
+		List<SearchResultItem> resultItems = null;
+		if (language!=null && language.length()>0) {
+			if (language.equalsIgnoreCase(lang[0]))
+				resultItems = search.search(query,20,false,"en");
+			else if (language.equalsIgnoreCase(lang[1]))
+				resultItems = search.search(query,20,false,"de");
+			else 
+				resultItems = search.search(query,20,false);
+		} else { 
+			resultItems = search.search(query,20,true);
+		}
+		for (int i = 0; i < resultItems.size(); i++) {
+			SearchResultItem item = resultItems.get(i);
+			%>
+			<div class="bs-callout bs-callout-info col-sm-12">
+				<a href="<%=item.getUrl()%>">
+				<div class="col-sm-1">
+					<h3>#<%=item.getRank()%></h3>
+				</div>
+				<div class="col-sm-11">
+					<h4><b><%=item.getTitle() %></b></h4>
+					<h5> <%=item.getUrl()%></h5>
+					<h5><%=item.getTf_idf()%></h5>
+					<h6><%=item.getContent_snap()%></h6>
+				</div>
+				</a>
+			</div>
+			<%
 		}
 		if (resultItems.size() < 1) {
-	%>
-	<div style="top: 30%; left: 40%; position: absolute;">
-		<h3 align="center" style="color:#5E6263;">No Result found</h3>		
-	</div>
-	<%
+			%>
+			<div style="top: 30%; left: 40%; position: absolute;">
+				<h3 align="center" style="color:#5E6263;">No Result found</h3>		
+			</div>
+			<%
 		}
+	} else {
 	%>
-
+	
+	<%
+	
+		ImageSearch search = new ImageSearch();
+		List<ImageSearchResultItem> resultItems = null;
+		
+		if (language!=null && language.length()>0) {
+			if (language.equalsIgnoreCase(lang[0]))
+				resultItems = search.search_(query,20,false,"en");
+			else if (language.equalsIgnoreCase(lang[1]))
+				resultItems = search.search_(query,20,false,"de");
+			else 
+				resultItems = search.search_(query,20,false,"en");
+		} else { 
+			resultItems = search.search_(query,20,true,"en");
+		}
+		
+		for (int i = 0; i < resultItems.size(); i++)
+		{
+			%>
+			<img src="<%= "data:"+resultItems.get(i).getExtension()+";base64,"+ resultItems.get(i).getImage() %>"/>
+			<%
+		}
+	}
+	%>
 
 	<script type="text/javascript" src="js/jquery-1.9.1.min.js"></script>
 	<script type="text/javascript" src="js/bootstrap.min.js"></script>

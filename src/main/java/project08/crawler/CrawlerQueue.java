@@ -8,7 +8,6 @@ import java.util.LinkedList;
 
 /**
  * Old unused Crawler queue, may be needed later again
- * Created by Nico on 02.November.15.
  */
 public class CrawlerQueue {
 

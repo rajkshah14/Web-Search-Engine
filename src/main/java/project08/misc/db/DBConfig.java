@@ -6,7 +6,6 @@ import java.sql.SQLException;
 
 /**
  * Simple class to create preconfigured connections
- * Created by nico on 04.November.15.
  */
 public class DBConfig {
     private static final String connectionString = "jdbc:postgresql://localhost:5432/";

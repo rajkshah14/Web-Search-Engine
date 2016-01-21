@@ -3,42 +3,54 @@ package project08.query;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.commons.lang3.StringUtils;
+import project08.dictionary.DictionaryManager;
+import project08.dictionary.IDict;
 import project08.indexer.Stemmer;
 import project08.misc.db.DML;
 
-/**
- * Created by Nico on 20.November.15.
- */
 public class QueryParser {
     private String query;
-
+    private String lang;
 
 
     private List<String> terms;
     private List<String> quoted;
     private List<String> sites;
+    private List<String> synonyms;
 
-    public QueryParser(String query)
+    public QueryParser(String query, String lang)
     {
+        this.lang = lang;
         this.query = query.toLowerCase();
         terms = new ArrayList<>();
         quoted = new ArrayList<>();
         sites = new ArrayList<>();
+        synonyms = new ArrayList<>();
         String[] terms = query.split(" ");
         Stemmer stem = new Stemmer();
         for (int i = 0; i < terms.length; i++) {
             if(terms[i].startsWith("site:")){ //Site operator
                 sites.add(terms[i].substring(5));
-            }else{
-                if(terms[i].startsWith("\"") && terms[i].endsWith("\""))
-                {
-                    quoted.add(terms[i].substring(1,terms[i].length()-1)); //TODO should they also be stemmed?
-                }else {
-                    terms[i] = stem.stemString(terms[i]).trim();
-                    this.terms.add(terms[i]);
-                }
+            }else if(terms[i].startsWith("\"") && terms[i].endsWith("\""))
+            {
+              quoted.add(terms[i].substring(1,terms[i].length()-1)); //TODO should they also be stemmed?
+            }else if(terms[i].startsWith("~")){
+                synonyms.add(terms[i].substring(1));
+            }else {
+                terms[i] = stem.stemString(terms[i]).trim();
+                this.terms.add(terms[i]);
             }
         }
+    }
+
+    public int getTermCount(){
+        return terms.size()+quoted.size()+synonyms.size();
+    }
+
+    public QueryParser(String query)
+    {
+       this(query, "en");
     }
 
 
@@ -54,8 +66,19 @@ public class QueryParser {
         return quoted;
     }
 
+    public List<String> getSynonyms() {
+        return synonyms;
+    }
+
     public List<String> getSites() {
         return sites;
+    }
+
+    public List<String> getAllTerms(){
+        ArrayList<String> t = new ArrayList<>(terms);
+        t.addAll(quoted);
+        t.addAll(synonyms);
+        return t;
     }
 
     public String[] getTermsArray() {
@@ -87,6 +110,28 @@ public class QueryParser {
         return where;
     }
 
+    public String getSynonymWherePredicate()
+    {
+        IDict dict;
+        if(lang.equalsIgnoreCase("en"))
+            dict = DictionaryManager.getDictionary(DictionaryManager.Language.ENG);
+        else if(lang.equalsIgnoreCase("de"))
+            dict = DictionaryManager.getDictionary(DictionaryManager.Language.GER);
+        else
+            dict = DictionaryManager.getDictionary(DictionaryManager.Language.ENG);
+
+        String where = " ";
+        for (String s : getSynonyms()) {
+            List<String> words = dict.getSynonyms(s);
+            List<Integer> hashCodes = new ArrayList<>();
+            for (String word : words) {
+                hashCodes.add(word.hashCode());
+            }
+            where += "AND "+ DML.Features_word_id +" IN (" + StringUtils.join(hashCodes, ',') + ") ";
+        }
+        return where;
+    }
+
     public String getSitesWherePredicate()
     {
         String where = " ";
@@ -98,6 +143,6 @@ public class QueryParser {
 
     public String getWherePedicate()
     {
-        return getQuotedWherePredicate() + getSitesWherePredicate();
+        return getQuotedWherePredicate() + getSynonymWherePredicate() + getSitesWherePredicate();
     }
 }

@@ -10,6 +10,7 @@ import java.util.Map;
 import org.la4j.Matrix;
 import org.la4j.Vector;
 import org.la4j.Vectors;
+import org.la4j.matrix.DenseMatrix;
 import org.la4j.matrix.SparseMatrix;
 import org.la4j.vector.dense.BasicVector;
 
@@ -42,9 +43,10 @@ public class PageRank {
 	
 	private void generateAdjacencyMatrix(Connection conn) {
 		int matrSize = doc_ids.size();
-		transactionMatrix = SparseMatrix.zero(matrSize, matrSize);
+		transactionMatrix = DenseMatrix.zero(matrSize, matrSize);
 		int[][] links = null;
 		try {
+			System.out.println("Getting Links");
 			PreparedStatement ps = conn.prepareStatement(query_select_links,ResultSet.TYPE_SCROLL_SENSITIVE,ResultSet.CONCUR_UPDATABLE);
 			ResultSet rs = ps.executeQuery();
 			rs.last();
@@ -57,6 +59,7 @@ public class PageRank {
 				i++;
 			}
 			ps.close();
+			System.out.println("Got Links");
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -66,17 +69,21 @@ public class PageRank {
 		
 		int links_count = links.length;
 
+		System.out.println("Starting link init of " + links_count + " Links");
 		for (int i = 0; i < links_count; i++) {
+			System.out.println("Initializing link " + i + " of " + links_count );
 			int from_docId = links[i][0];
 			int to_docId = links[i][1];
 			Integer from_pos = doc_ids.get(from_docId);
 			Integer to_pos = doc_ids.get(to_docId);
-			if(from_pos != null && to_pos != null)
+			if(from_pos != null && to_pos != null) {
 				transactionMatrix.set(from_pos, to_pos, transactionMatrix.get(from_pos,to_pos)+1);
+			}
 		}
 
 		//Calculate transition probability
 		for(int i = 0; i < matrSize; i++) {
+			System.out.println("Calculating row " + i + " of " + matrSize );
 			Vector row = transactionMatrix.getRow(i);
 			double outDegree = row.sum();
 			if (outDegree > 0) {
@@ -86,7 +93,9 @@ public class PageRank {
 				//Add random Jump
 				row = row.add(Parameters.pagerank_alpha/matrSize);
 			}else //If no outgoing links, jump to every page with same probability
+			{
 				row = row.add(1.0/matrSize);
+			}
 
 			transactionMatrix.setRow(i, row);
 		}
@@ -117,9 +126,11 @@ public class PageRank {
 
 		double distance = 1f;
 		int iterations = 0;
-		while( iterations < 50 || distance > 0.001)
+		while( iterations < 60 || distance > 0.001)
 		{
 			iterations++;
+			System.out.println("Iterating algorithm " + iterations + " of 60 times. Distance: " + distance);
+
 			Vector newRank = rank.multiply(transactionMatrix);
 			distance = rank.subtract(newRank).fold(Vectors.mkManhattanNormAccumulator());
 			rank = newRank;
@@ -128,18 +139,26 @@ public class PageRank {
 		PreparedStatement stmt = null;
 		PreparedStatement stmtfeatures = null;
 		try {
+			System.out.println("Updating DB");
 			stmt = con.prepareStatement("UPDATE documents set page_rank = ? WHERE doc_id = ?;");
 			stmtfeatures = con.prepareStatement("UPDATE features set page_rank = ? WHERE doc_id = ?;");
-
+			int count = 0;
 			for (Map.Entry<Integer, Integer> matrixPos : doc_ids.entrySet()) {
-					stmt.setDouble(1,rank.get(matrixPos.getValue()));
-					stmt.setInt(2, matrixPos.getKey());
+				count++;
+				stmt.setDouble(1,rank.get(matrixPos.getValue()));
+				stmt.setInt(2, matrixPos.getKey());
 
-					stmtfeatures.setDouble(1,rank.get(matrixPos.getValue()));
-					stmtfeatures.setInt(2, matrixPos.getKey());
+				stmtfeatures.setDouble(1,rank.get(matrixPos.getValue()));
+				stmtfeatures.setInt(2, matrixPos.getKey());
 
-					stmt.addBatch();
-					stmtfeatures.addBatch();
+				stmt.addBatch();
+				stmtfeatures.addBatch();
+				if(count % 100 == 0)
+				{
+					stmt.executeBatch();
+					stmtfeatures.executeBatch();
+
+				}
 			}
 			stmt.executeBatch();
 			stmtfeatures.executeBatch();
@@ -147,6 +166,7 @@ public class PageRank {
 			con.commit();
 			stmt.close();
 			stmtfeatures.close();
+			System.out.println("Updated DB");
 
 		} catch (SQLException e) {
 			e.printStackTrace();

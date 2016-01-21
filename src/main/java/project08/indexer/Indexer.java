@@ -69,7 +69,8 @@ public class Indexer {
 		html = StringEscapeUtils.unescapeHtml4(html);
 		Charset.forName("UTF-8").encode(html);
 		extractMetaData(html);
-		html = Html2Text.fromat(html).toLowerCase();
+		html = Html2Text.format(html).toLowerCase();
+		html = getImagePositions(html);
 		if (html == null)
 			return false;
 		language = LanguageClassifier.getLanguage(html);
@@ -86,7 +87,38 @@ public class Indexer {
 		}
 		return true;
 	}
-	
+
+	private String getImagePositions(String html){
+		String tagregex = "<\\s*img[^>]*>"; //Match everything except for images
+		Pattern p = Pattern.compile(tagregex);
+		Matcher m = p.matcher(html);
+		int offset = 0;
+		int i = 0;
+		while (m.find()) {
+			int position = m.start()-offset;
+			offset += m.end()-m.start();
+			try {
+				PreparedStatement stmt = conn.prepareStatement("UPDATE " + DML.Table_Images +
+                        " SET " + DML.Col_position + " = ? WHERE "+
+                        DML.Col_docId+ "= ? AND " + DML.Col_pageindex + " = ?");
+
+				stmt.setInt(1,position);
+				stmt.setInt(2,docId);
+				stmt.setInt(3,i);
+				stmt.execute();
+				conn.commit();
+			} catch (SQLException e) {
+				continue;
+			}finally{
+				i++;
+			}
+		}
+		m.reset();
+		html = m.replaceAll(" ");
+
+		return html;
+	}
+
 	public boolean processStream() {
 		StringBuffer buffer = new StringBuffer();
 		int ptr = 0;
@@ -252,10 +284,10 @@ public class Indexer {
                     + DML.Col_title + " = ? "
                     + "WHERE " + DML.Col_docId + " = ?");
 
-			stmt.setString(1, Html2Text.fromat(description));
-			stmt.setString(2, Html2Text.fromat(keywords));
-			stmt.setString(3, Html2Text.fromat(author.substring(0,Math.min(DML.Col_author_length,author.length()))));
-			stmt.setString(4, Html2Text.fromat(title.substring(0,Math.min(DML.Col_title_length,title.length()))));
+			stmt.setString(1, Html2Text.format(description));
+			stmt.setString(2, Html2Text.format(keywords));
+			stmt.setString(3, Html2Text.format(author.substring(0,Math.min(DML.Col_author_length,author.length()))));
+			stmt.setString(4, Html2Text.format(title.substring(0,Math.min(DML.Col_title_length,title.length()))));
 			stmt.setInt(5, docId);
 			stmt.execute();
 		} catch (SQLException e) {

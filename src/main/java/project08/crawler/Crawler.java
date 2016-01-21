@@ -13,7 +13,6 @@ import project08.misc.log.Log;
 
 /**
  * Main Crawler class, from here the workers will be configured and started.
- * Created by Nico on 03.November.15.
  */
 public class Crawler {
     
@@ -60,7 +59,7 @@ public class Crawler {
                         url = new URL(urls[i]);
 
                         Website start = new Website(url, 0); //The startwebsite
-                        start.saveToDB(conn);//put the startwebsite into the queue
+                        start.savetoQueue(conn);//put the startwebsite into the queue
                         conn.commit();
                     } catch (SQLException e) {
                     	Log.logException(e);
