@@ -1,10 +1,10 @@
-<%@page import="project08.misc.db.ReadTables"%>
-<%@page import="project08.Main"%>
-<%@page import="project08.crawler.Crawler"%>
-<%@page import="project08.misc.db.DML"%>
-<%@page import="project08.web.Index"%>
+<%@page import="searchengine.misc.db.ReadTables"%>
+<%@page import="searchengine.Main"%>
+<%@page import="searchengine.features.crawler.Crawler"%>
+<%@page import="searchengine.misc.db.DML"%>
+<%@page import="searchengine.Index"%>
 <%@page import="java.io.PrintWriter"%>
-<%@page import="project08.model.*"%>
+<%@page import="searchengine.model.*"%>
 <%@page import="java.util.List"%>
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
 <!DOCTYPE HTML>

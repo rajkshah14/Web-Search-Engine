@@ -1,7 +1,10 @@
-<%@page import="project08.model.ImageSearchResultItem"%>
-<%@page import="project08.model.SearchResultItem"%>
+<%@page import="searchengine.features.search.Search"%>
+<%@page import="searchengine.features.search.ImageSearch"%>
+<%@page import="searchengine.model.AdItem"%>
+<%@page import="searchengine.features.AdAPI"%>
+<%@page import="searchengine.model.ImageSearchResultItem"%>
+<%@page import="searchengine.model.SearchResultItem"%>
 <%@ page import="java.util.*"%>
-<%@ page import="project08.search.*"%>
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
 
 <!DOCTYPE HTML>
@@ -89,6 +92,32 @@
 			</div> <!-- /.navbar-collapse -->
 		</div> <!-- /.container-fluid -->
 	</nav>
+	
+	<%
+	AdAPI api = new AdAPI();
+	List<AdItem> ads = api.getAds(query);
+	for (int i =0; i <ads.size(); i++) {
+		AdItem item = ads.get(i);
+	%>
+		<div class="bs-callout bs-callout-info col-sm-12">
+			<a href="<%=item.getClickURL()%>" >
+			<% if (item.getImage().length()>0)  { %>
+				<div class="col-sm-2"><img src="<%= item.getImage() %>" style="height: 100px; width: 100px"></div>
+				<div class="col-sm-9">
+			<%} else { %>
+				<div class="col-sm-11">
+			<%} %>
+					<h4><b><%=item.getDescription()%></b></h4>
+					<h5> <%=item.getUrl()%></h5>
+				</div>
+			<div class="col-sm-1">
+				<h5 style="color: green">Ads</h5>
+			</div>
+			</a>
+		</div>
+	<% 
+	};
+	%>
 
 	<%
 	
@@ -158,10 +187,15 @@
 	}
 	%>
 
+	
+	
+
+	
+</div>
+
 	<script type="text/javascript" src="js/jquery-1.9.1.min.js"></script>
 	<script type="text/javascript" src="js/bootstrap.min.js"></script>
 	<script type="text/javascript" src="js/typeahead.bundle.min.js"></script>
 	<script type="text/javascript" src="js/search.js"></script>
-</div>
 </body>
 </html>

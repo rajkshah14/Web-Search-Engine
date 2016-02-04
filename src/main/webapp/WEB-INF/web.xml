@@ -8,21 +8,41 @@
 
 	<servlet>
 		<servlet-name>mysearch</servlet-name>
-		<servlet-class>project08.servlet.SubmitCrawlerTask</servlet-class>
+		<servlet-class>searchengine.servlet.SubmitCrawlerTask</servlet-class>
+	</servlet>
+
+	<servlet>
+		<servlet-name>searchengine</servlet-name>
+		<servlet-class>searchengine.servlet.SearchengineConfigServlet</servlet-class>
 	</servlet>
 		
 	<servlet>
 		<servlet-name>querysuggestion</servlet-name>
-		<servlet-class>project08.servlet.QuerySuggestion</servlet-class>
+		<servlet-class>searchengine.servlet.QuerySuggestion</servlet-class>
+	</servlet>
+	
+	<servlet>
+		<servlet-name>adclick</servlet-name>
+		<servlet-class>searchengine.servlet.AdClick</servlet-class>
 	</servlet>
 	
 	<servlet-mapping>
 		<servlet-name>mysearch</servlet-name>
-		<url-pattern>/project08/search</url-pattern>
+		<url-pattern>/searchengine/search</url-pattern>
+	</servlet-mapping>
+
+	<servlet-mapping>
+		<servlet-name>searchengine</servlet-name>
+		<url-pattern>/searchengine/searchengine</url-pattern>
+	</servlet-mapping>
+
+	<servlet-mapping>
+		<servlet-name>querysuggestion</servlet-name>
+		<url-pattern>/searchengine/querysuggestion</url-pattern>
 	</servlet-mapping>
 	
 	<servlet-mapping>
-		<servlet-name>querysuggestion</servlet-name>
-		<url-pattern>/project08/querysuggestion</url-pattern>
+		<servlet-name>adclick</servlet-name>
+		<url-pattern>/searchengine/adclick</url-pattern>
 	</servlet-mapping>
 </web-app>
